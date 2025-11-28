@@ -1,0 +1,101 @@
+---
+title: "Analise Clinica"
+output: pdf_document
+date: "2025-11-28"
+---
+
+```{r}
+library(tidyverse)
+library(survival)
+library(survminer)
+library(lubridate)
+library(ggplot2)
+library(dplyr)
+
+dados <- read.delim("data_clinical_patient.txt")
+head(dados)
+```
+
+# Pergunta 1 — Qual é o perfil demográfico dos pacientes?
+- Qual a idade média e mediana dos pacientes?
+- Há mais homens ou mulheres?
+
+```{r}
+summary(dados$AGE)
+sd(dados$AGE, na.rm = TRUE)
+```
+
+
+```{r}
+ggplot(dados %>% filter(SEX %in% c("Male", "Female")),
+       aes(x = SEX)) +
+  geom_bar(fill = "steelblue") +
+  theme_minimal() +
+  labs(title = "Distribuição por Sexo",
+       x = "Sexo",
+       y = "Número de Pacientes")
+```
+# Pergunta 2 — Como é a distribuição da idade dos pacientes?
+- A idade é simétrica ou assimétrica?
+- Existem outliers?
+- A população é jovem, idosa ou mista?
+
+```{r}
+dados %>% 
+  filter(!is.na(AGE) & AGE != "") %>% 
+  ggplot(aes(x = AGE)) +
+  geom_histogram(bins = 30, color = "black", fill = "lightblue") +
+  theme_minimal() +
+  labs(title = "Distribuição da Idade", x = "Idade (anos)", y = "Contagem")
+```
+
+```{r}
+dados %>% 
+  filter(!is.na(AGE) & AGE != "") %>% 
+  ggplot(aes(y = AGE)) +
+  geom_boxplot(fill = "lightblue") +
+  theme_minimal() +
+  labs(title = "Boxplot da Idade", y = "Idade (anos)")
+```
+# Pergunta 3 — Qual a distribuição de estágios tumorais?
+- Quantos pacientes estão nos estágios I, II, III, IV?
+- A amostra tem mais casos iniciais ou avançados?
+
+```{r}
+dados %>% 
+  filter(!is.na(STAGE) & STAGE != "") %>% 
+  ggplot(aes(x = STAGE)) +
+    geom_bar(fill = "steelblue") +
+    theme_minimal() +
+    labs(title = "Distribuição do Estágio", x = "Estágio", y = "Contagem")
+```
+
+# Pergunta 4 — Qual é o perfil de tabagismo da coorte?
+- Quantos são nunca fumantes, ex-fumantes ou fumantes ativos?
+- Como está a distribuição de pack-years?
+
+```{r}
+dados %>%
+  filter(!is.na(SMOKING_HISTORY), SMOKING_HISTORY != "") %>%
+  ggplot(aes(x = SMOKING_HISTORY)) +
+  geom_bar(fill = "steelblue") +
+  theme_minimal() +
+  labs(
+    title = "Distribuição Historico de Tabagismo",
+    x = "Tipo de Fumante",
+    y = "Número de Pacientes"
+  ) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+```{r}
+summary(dados$SMOKING_PACK_YEARS)
+```
+```{r}
+dados %>% 
+  filter(!is.na(SMOKING_PACK_YEARS) & SMOKING_PACK_YEARS != "") %>% 
+  ggplot(aes(x = SMOKING_PACK_YEARS)) +
+  geom_histogram(bins = 30, fill = "orange", color = "black") +
+  theme_minimal() +
+  labs(title = "Distribuição de Pack-Years", x = "Pack-years", y = "Contagem")
+```
+
