@@ -1,6 +1,8 @@
 ---
 title: "Analise Clinica"
-output: pdf_document
+output:
+  html_document:
+    df_print: paged
 date: "2025-11-28"
 ---
 
@@ -15,6 +17,27 @@ library(dplyr)
 dados <- read.delim("data_clinical_patient.txt")
 head(dados)
 ```
+```{r}
+clean_smoking <- function(x) {
+  x <- toupper(trimws(x))  # padroniza texto
+
+  case_when(
+    x %in% c("LIFELONG NON-SMOKER", "NEVER SMOKER", "NON-SMOKER") ~ "Never",
+    x %in% c("CURRENT SMOKER", "SMOKER") ~ "Current",
+    x == "CURRENT REFORMED SMOKER, DURATION NOT SPECIFIED" ~ "Reformed (ns)",
+    x == "CURRENT REFORMED SMOKER FOR > 15 YEARS" ~ "Reformed >15y",
+    x == "CURRENT REFORMED SMOKER FOR < OR = 15 YEARS" ~ "Reformed <15y",
+    
+    # QUALQUER OUTRA CATEGORIA → 'Other'
+    TRUE ~ "Other"
+  )
+}
+
+dados <- dados %>%
+  mutate(
+    SMOKING_HISTORY = clean_smoking(SMOKING_HISTORY)
+  )
+```
 
 # Pergunta 1 — Qual é o perfil demográfico dos pacientes?
 - Qual a idade média e mediana dos pacientes?
@@ -22,6 +45,7 @@ head(dados)
 
 ```{r}
 summary(dados$AGE)
+print('Desvio padrao idade:')
 sd(dados$AGE, na.rm = TRUE)
 ```
 
@@ -31,9 +55,11 @@ ggplot(dados %>% filter(SEX %in% c("Male", "Female")),
        aes(x = SEX)) +
   geom_bar(fill = "steelblue") +
   theme_minimal() +
-  labs(title = "Distribuição por Sexo",
+  labs(title = "Distribucao por Sexo",
        x = "Sexo",
-       y = "Número de Pacientes")
+       y = "Numero de Pacientes")
+
+ggsave(".\\graficos\\qtde_pacientes_por_sexo.jpeg", width = 6, height = 4, dpi = 300)
 ```
 # Pergunta 2 — Como é a distribuição da idade dos pacientes?
 - A idade é simétrica ou assimétrica?
@@ -46,7 +72,9 @@ dados %>%
   ggplot(aes(x = AGE)) +
   geom_histogram(bins = 30, color = "black", fill = "lightblue") +
   theme_minimal() +
-  labs(title = "Distribuição da Idade", x = "Idade (anos)", y = "Contagem")
+  labs(title = "Distribuicao da Idade", x = "Idade (anos)", y = "Contagem")
+
+ggsave(".\\graficos\\distribuicao_idades.jpeg", width = 6, height = 4, dpi = 300)
 ```
 
 ```{r}
@@ -56,6 +84,8 @@ dados %>%
   geom_boxplot(fill = "lightblue") +
   theme_minimal() +
   labs(title = "Boxplot da Idade", y = "Idade (anos)")
+
+ggsave(".\\graficos\\boxplot_idades.jpeg", width = 6, height = 4, dpi = 300)
 ```
 # Pergunta 3 — Qual a distribuição de estágios tumorais?
 - Quantos pacientes estão nos estágios I, II, III, IV?
@@ -68,6 +98,8 @@ dados %>%
     geom_bar(fill = "steelblue") +
     theme_minimal() +
     labs(title = "Distribuição do Estágio", x = "Estágio", y = "Contagem")
+
+ggsave(".\\graficos\\distribuicao_estagios.jpeg", width = 6, height = 4, dpi = 300)
 ```
 
 # Pergunta 4 — Qual é o perfil de tabagismo da coorte?
@@ -84,8 +116,8 @@ dados %>%
     title = "Distribuição Historico de Tabagismo",
     x = "Tipo de Fumante",
     y = "Número de Pacientes"
-  ) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  )
+ggsave(".\\graficos\\distribuicao_historico_tabagismo.jpeg", width = 6, height = 4, dpi = 300)
 ```
 ```{r}
 summary(dados$SMOKING_PACK_YEARS)
@@ -97,5 +129,145 @@ dados %>%
   geom_histogram(bins = 30, fill = "orange", color = "black") +
   theme_minimal() +
   labs(title = "Distribuição de Pack-Years", x = "Pack-years", y = "Contagem")
+
+ggsave(".\\graficos\\distribuicao_pack_years.jpeg", width = 6, height = 4, dpi = 300)
+```
+# Pergunta 5 — Existe associação entre sexo e tabagismo?
+
+```{r}
+dados %>%
+  mutate(
+    SEX = toupper(trimws(SEX)),
+    SMOKING_HISTORY = trimws(SMOKING_HISTORY)
+  ) %>%
+  filter(
+    SEX %in% c("MALE", "FEMALE"),
+    !is.na(SMOKING_HISTORY), SMOKING_HISTORY != ""
+  ) %>%
+  ggplot(aes(x = SMOKING_HISTORY, fill = SEX)) +
+  geom_bar(position = "dodge") +
+  theme_minimal() +
+  labs(
+    title = "Distribuição do Tabagismo por Sexo",
+    x = "Categoria de Tabagismo",
+    y = "Número de Pacientes"
+  ) +
+  scale_fill_manual(values = c("MALE" = "#1f77b4", "FEMALE" = "#ff7f0e")) +
+  coord_flip() 
+
+ggsave(".\\graficos\\distribuicao_tabagismo_sexo.jpeg", width = 6, height = 4, dpi = 300)
+```
+```{r}
+dados %>%
+  mutate(
+    SEX = toupper(trimws(SEX)),
+    SMOKING_HISTORY = trimws(SMOKING_HISTORY)
+  ) %>%
+  filter(
+    SEX %in% c("MALE", "FEMALE"),
+    !is.na(SMOKING_HISTORY), SMOKING_HISTORY != ""
+  ) %>%
+  ggplot(aes(x = SEX, fill = SMOKING_HISTORY)) +
+  geom_bar(position = "fill") +
+  theme_minimal() +
+  labs(
+    title = "Proporção de Tabagismo Dentro de Cada Sexo",
+    x = "Sexo",
+    y = "Proporção"
+  ) +
+  scale_y_continuous(labels = scales::percent) +
+  scale_fill_brewer(palette = "Set2")
+
+ggsave(".\\graficos\\proporcao_tabagismo_sexo.jpeg", width = 6, height = 4, dpi = 300)
+```
+
+# Pergunta 6 — Idade difere entre fumantes e não fumantes?
+
+```{r}
+dados %>%
+  mutate(
+    SMOKING_HISTORY = toupper(trimws(SMOKING_HISTORY))
+  ) %>%
+  filter(
+    !is.na(SMOKING_HISTORY),
+    SMOKING_HISTORY != "",
+    !is.na(AGE)
+  ) %>%
+  ggplot(aes(x = SMOKING_HISTORY, y = AGE, fill = SMOKING_HISTORY)) +
+  geom_boxplot() +
+  theme_minimal() +
+  labs(
+    title = "Distribuição da Idade por Categoria de Tabagismo",
+    x = "",
+    y = "Idade (anos)"
+  ) +
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  )
+
+ggsave(".\\graficos\\distribuicao_idade_cat_tabag.jpeg", width = 6, height = 4, dpi = 300)
+```
+# Pergunta 7 — Estágio da doença difere entre fumantes e não fumantes?
+```{r}
+g1 <- c("I", "IA")
+g2 <- c("IB", "II")
+g3 <- c("IIA", "IIB")
+g4 <- c("III", "IIIA")
+g5 <- c("IIIB", "IV")
+
+
+plot_stage_group <- function(data, stages, title_suffix) {
+  data %>%
+    filter(STAGE %in% stages) %>%
+    ggplot(aes(y = SMOKING_HISTORY, fill = STAGE)) +
+    geom_bar() +
+    coord_flip() +
+    facet_wrap(~ STAGE, ncol = 2) +   # 2 painéis por gráfico
+    theme_minimal(base_size = 15) +
+    labs(
+      title = paste("Estágio Tumoral por Categoria de Tabagismo —", title_suffix),
+      y = "Categoria de Tabagismo",
+      x = "Número de Pacientes"
+    ) +
+    theme(
+      axis.text.y = element_text(size = 8),
+      axis.text.x = element_text(size = 12, angle = 90),
+      strip.text = element_text(size = 14, face = "bold"),
+      legend.position = "none",
+      plot.title = element_text(size = 18, face = "bold")
+    )
+}
+
+gplot1 <- plot_stage_group(dados, g1, "Estágios I / IA")
+gplot2 <- plot_stage_group(dados, g2, "Estágios IB / II")
+gplot3 <- plot_stage_group(dados, g3, "Estágios IIA / IIB")
+gplot4 <- plot_stage_group(dados, g4, "Estágios III / IIIA")
+gplot5 <- plot_stage_group(dados, g5, "Estágios IIIB / IV")
+```
+
+```{r}
+gplot1
+ggsave(".\\graficos\\estagio_tumoral_I_IA.jpeg", width = 6, height = 4, dpi = 300)
+```
+
+```{r}
+gplot2
+ggsave(".\\graficos\\estagio_tumoral_IB_II.jpeg", width = 6, height = 4, dpi = 300)
+```
+
+```{r}
+gplot3
+ggsave(".\\graficos\\estagio_tumoral_IIA_IIB.jpeg", width = 6, height = 4, dpi = 300)
+```
+
+```{r}
+gplot4
+ggsave(".\\graficos\\estagio_tumoral_III_IIIA.jpeg", width = 6, height = 4, dpi = 300)
+```
+
+```{r}
+gplot5
+ggsave(".\\graficos\\estagio_tumoral_IIIB_IV.jpeg", width = 6, height = 4, dpi = 300)
 ```
 
