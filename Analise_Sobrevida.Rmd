@@ -1,0 +1,90 @@
+---
+title: "Analise_Sobrevida"
+output: html_document
+date: "2025-11-28"
+---
+```{r}
+library(ggplot2)
+library(dplyr)
+library(survival)
+library(survminer)
+library(cowplot)
+```
+```{r}
+```
+
+```{r}
+dados <- read.delim('./data_clinical_patient.txt')
+colnames(dados)
+
+
+dados <- dados %>%
+  mutate(
+    OS_STATUS = toupper(trimws(OS_STATUS)),
+    os_event = case_when(
+      OS_STATUS == "1:DECEASED" ~ 1,
+      OS_STATUS == "0:LIVING"   ~ 0,
+      TRUE ~ NA_real_
+    ),
+    os_time = OS_MONTHS
+  )
+
+dados_surv <- dados %>%
+  filter(
+    !is.na(os_event),  # remove status vazio
+    !is.na(os_time),   # remove tempo faltante
+    os_time > 0        # evita tempo zero
+  )
+
+dados_surv <- dados_surv %>%
+  mutate(
+    STAGE = toupper(trimws(STAGE)),
+    STAGE = ifelse(STAGE == "", NA, STAGE)
+  ) %>%
+  filter(!is.na(STAGE))
+
+dados_surv <- dados_surv %>%
+  mutate(
+    STAGE_GROUP = case_when(
+      STAGE %in% c("I","IA","IB") ~ "I",
+      STAGE %in% c("II","IIA","IIB") ~ "II",
+      STAGE %in% c("III","IIIA","IIIB") ~ "III",
+      STAGE == "IV" ~ "IV"
+    )
+  )
+```
+
+
+```{r}
+fit_stage <- survfit(Surv(os_time, os_event) ~ STAGE_GROUP, data = dados_surv)
+
+ggsurv_stage <- ggsurvplot(
+  fit_stage,
+  data = dados_surv,
+  pval = TRUE,
+  conf.int = FALSE,
+  risk.table = TRUE,
+  xlab = "Tempo (meses)",
+  ylab = "Probabilidade de Sobrevivência",
+  legend.title = "Estágio",
+  risk.table.height = 0.30
+)
+
+grafico_curva <- ggsurv_stage$plot
+grafico_tabela <- ggsurv_stage$table
+
+# Junta os dois em um único objeto
+figura_completa <- plot_grid(
+  grafico_curva,
+  grafico_tabela,
+  ncol = 1,
+  rel_heights = c(3, 1.2)   # ajuste fino
+)
+
+ggsave("graficos/sobrevida_stage.jpeg",
+       plot = figura_completa,
+       width = 14,
+       height = 12,
+       dpi = 320)
+```
+
