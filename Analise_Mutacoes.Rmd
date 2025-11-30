@@ -1,0 +1,213 @@
+---
+title: "Analise de Mutacoes"
+output: html_document
+date: "2025-11-29"
+---
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(survival)
+library(survminer)
+library(tidyr)
+library(rstatix)
+library(ggpubr)
+```
+
+```{r}
+mut <- read.delim("data_mutations.txt", stringsAsFactors = FALSE)
+cli_pat <- read.delim("data_clinical_patient.txt", stringsAsFactors = FALSE)
+cli_sam <- read.delim("data_clinical_sample.txt", stringsAsFactors = FALSE)
+```
+
+```{r}
+mut <- mut %>% mutate(Tumor_Sample_Barcode = trimws(Tumor_Sample_Barcode))
+cli_sam <- cli_sam %>% mutate(SAMPLE_ID = trimws(SAMPLE_ID))
+cli_pat <- cli_pat %>% mutate(PATIENT_ID = trimws(PATIENT_ID))
+
+# Juntar mutações com pacientes via amostras
+mut_joined <- mut %>%
+  left_join(cli_sam %>% select(SAMPLE_ID, PATIENT_ID),
+            by = c("Tumor_Sample_Barcode" = "SAMPLE_ID"))
+```
+
+
+```{r}
+# Contar a frequência de cada tipo de classificação de variante
+variant_counts <- mut_joined %>%
+  group_by(Variant_Classification) %>%
+  summarise(Count = n()) %>%
+  arrange(desc(Count)) %>%
+  # Calcular a porcentagem em relação ao total de mutações
+  mutate(Percentage = Count / sum(Count) * 100) %>%
+  ungroup()
+
+# Exibir os 10 tipos de variantes mais comuns
+print(head(variant_counts, 10))
+```
+```{r}
+top_10_variants <- head(variant_counts, 10)
+
+p_variants <- ggplot(top_10_variants,
+                     aes(x = reorder(Variant_Classification, Count), y = Count)) +
+  geom_bar(stat = "identity", fill = "#3399CC") +
+  coord_flip() + # Girar as coordenadas para melhor leitura
+  labs(title = "Distribuição dos 10 Tipos de Mutações Mais Comuns",
+       x = "Classificação da Variante",
+       y = "Número Total de Mutações") +
+  theme_minimal(base_size = 14) +
+  geom_text(aes(label = sprintf("%.1f%%", Percentage)),
+            hjust = -0.1, size = 4) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.2))) # Ajusta o limite superior
+print(p_variants)
+```
+# Análise da Distribuição de TMB
+```{r}
+# Juntar dados clínicos de amostra (TMB) e de paciente (Tabagismo)
+tmb_data <- cli_sam %>%
+  select(PATIENT_ID, TMB_NONSYNONYMOUS) %>%
+  # Garantir que TMB seja numérico
+  mutate(TMB_NONSYNONYMOUS = as.numeric(TMB_NONSYNONYMOUS)) %>%
+  left_join(cli_pat %>%
+              select(PATIENT_ID, SMOKING_HISTORY, SMOKING_PACK_YEARS),
+            by = "PATIENT_ID") %>%
+  # Remover pacientes sem dados de TMB para a análise
+  filter(!is.na(TMB_NONSYNONYMOUS))
+
+# Converter SMOKING_PACK_YEARS para numérico (pode haver NAs)
+tmb_data <- tmb_data %>%
+  mutate(SMOKING_PACK_YEARS = as.numeric(SMOKING_PACK_YEARS))
+
+# Histograma do TMB
+p_tmb_dist <- ggplot(tmb_data, aes(x = TMB_NONSYNONYMOUS)) +
+  geom_histogram(binwidth = 5, fill = "#FF9999", color = "black") +
+  labs(title = "Distribuição da Carga Mutacional Tumoral (TMB)",
+       x = "TMB Não-Sinônima (mutações/Mb)",
+       y = "Contagem de Pacientes") +
+  theme_minimal(base_size = 14)
+
+print(p_tmb_dist)
+```
+
+# TMB vs. Histórico de Tabagismo
+```{r}
+tmb_smoking_grouped <- tmb_data %>%
+  mutate(Smoking_Group = case_when(
+    # Não-Fumante
+    SMOKING_HISTORY == 'Lifelong Non-Smoker' ~ "Não-Fumante",
+
+    # Ex-Fumante
+    SMOKING_HISTORY %in% c('Current Reformed Smoker For < Or = 15 Years',
+                           'Current Reformed Smoker For > 15 Years',
+                           'Current Reformed Smoker, Duration Not Specified') ~ "Ex-Fumante",
+
+    # Fumante
+    SMOKING_HISTORY == 'Current Smoker' ~ "Fumante",
+
+    # Tratar outras categorias que possam existir (embora não listadas)
+    TRUE ~ "Outros"
+  )) %>%
+  # Filtrar apenas os 3 grupos principais definidos
+  filter(Smoking_Group %in% c("Não-Fumante", "Ex-Fumante", "Fumante"))
+
+tmb_filtered <- tmb_smoking_grouped %>%
+  filter(TMB_NONSYNONYMOUS <= 40)
+
+p_tmb_smoking_grouped <- ggplot(tmb_filtered,
+                                aes(x = Smoking_Group, y = TMB_NONSYNONYMOUS, fill = Smoking_Group)) +
+  geom_boxplot(outlier.shape = NA) + # Oculta outliers do boxplot
+  labs(title = "TMB por Histórico de Tabagismo",
+       x = "Histórico de Tabagismo",
+       y = "TMB Não-Sinônima (mutações/Mb)") +
+  scale_fill_manual(values = c("Não-Fumante" = "#66C2A5",
+                               "Ex-Fumante" = "#FC8D62",
+                               "Fumante" = "#8DA0CB")) +
+  theme_minimal(base_size = 14) +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 15, hjust = 1))
+
+print(p_tmb_smoking_grouped)
+```
+
+# TMB vs. Histórico de Tabagismo (Relevancia estatistica)
+```{r}
+# --- Teste de Hipóteses Kruskal-Wallis ---
+
+# Certifique-se de usar o dataframe COMPLETO (tmb_smoking_grouped),
+# sem o filtro de TMB <= 40, para a análise estatística.
+
+# 1. Verificar se há dados suficientes
+if (length(unique(tmb_smoking_grouped$Smoking_Group)) >= 2 & nrow(tmb_smoking_grouped) > 10) {
+
+  # 2. Realizar o Teste de Kruskal-Wallis
+  kruskal_result <- kruskal.test(TMB_NONSYNONYMOUS ~ Smoking_Group,
+                                 data = tmb_smoking_grouped)
+
+  print("=================================================================")
+  print("Resultado do Teste de Kruskal-Wallis (TMB vs. Histórico de Tabagismo)")
+  print("=================================================================")
+  print(kruskal_result)
+
+  # 3. Interpretação do Resultado
+  if (kruskal_result$p.value < 0.05) {
+    print("Conclusão: HÁ diferença estatisticamente significativa (p < 0.05) na TMB entre pelo menos dois dos grupos de tabagismo.")
+    
+    # --- Teste Post-Hoc de Dunn (Opcional, se p < 0.05) ---
+    # Para saber EXATAMENTE quais pares de grupos são diferentes (ex: Não-Fumante vs. Fumante)
+
+    
+     
+     # Realizar o Teste de Dunn com correção de Bonferroni para comparações múltiplas
+    dunn_test_result <- tmb_smoking_grouped %>%
+    dunn_test(TMB_NONSYNONYMOUS ~ Smoking_Group, p.adjust.method = "bonferroni")
+    print("Resultado do Teste Post-Hoc de Dunn (Comparação Par a Par):")
+    print(dunn_test_result)
+    
+  } else {
+    print("Conclusão: NÃO HÁ diferença estatisticamente significativa (p >= 0.05) na TMB entre os grupos de tabagismo.")
+  }
+} else {
+  print("Erro: Dados insuficientes para realizar o Teste de Kruskal-Wallis.")
+}
+```
+
+```{r}
+gene_patient_counts <- mut_joined %>%
+  select(PATIENT_ID, Hugo_Symbol) %>%
+  distinct()
+
+gene_frequency <- gene_patient_counts %>%
+  group_by(Hugo_Symbol) %>%
+  summarise(Patient_Count = n()) %>%
+  arrange(desc(Patient_Count)) %>%
+  ungroup()
+
+total_patients <- cli_pat %>%
+  select(PATIENT_ID) %>%
+  distinct() %>%
+  nrow()
+
+gene_frequency <- gene_frequency %>%
+  mutate(Mutation_Frequency = (Patient_Count / total_patients) * 100)
+
+# Seleciona o Top 10
+top_10_genes <- head(gene_frequency, 10)
+
+p_top_genes <- ggplot(top_10_genes,
+                      aes(x = reorder(Hugo_Symbol, Mutation_Frequency), y = Mutation_Frequency)) +
+  geom_bar(stat = "identity", fill = "#3399CC") +
+  coord_flip() + # Inverte o eixo para melhor leitura dos nomes dos genes
+  labs(title = "Top 10 Genes Mais Mutados",
+       x = "Gene (Hugo Symbol)",
+       y = "Frequência de Mutação em Pacientes (%)") +
+  theme_minimal(base_size = 14) +
+  # Adiciona os rótulos de porcentagem na barra
+  geom_text(aes(label = sprintf("%.1f%%", Mutation_Frequency)),
+            hjust = -0.1, size = 4) +
+  # Ajusta o limite superior para acomodar os rótulos de porcentagem
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15)))
+
+p_top_genes
+```
+
+
