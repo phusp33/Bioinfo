@@ -117,16 +117,17 @@ p_tmb_smoking_grouped <- ggplot(tmb_filtered,
                                 aes(x = Smoking_Group, y = TMB_NONSYNONYMOUS, fill = Smoking_Group)) +
   geom_boxplot(outlier.shape = NA) + # Oculta outliers do boxplot
   labs(title = "TMB por Histórico de Tabagismo",
-       x = "Histórico de Tabagismo",
+       x = "",
        y = "TMB Não-Sinônima (mutações/Mb)") +
   scale_fill_manual(values = c("Não-Fumante" = "#66C2A5",
                                "Ex-Fumante" = "#FC8D62",
                                "Fumante" = "#8DA0CB")) +
-  theme_minimal(base_size = 14) +
-  theme(legend.position = "none",
-        axis.text.x = element_text(angle = 15, hjust = 1))
+  theme_minimal(base_size = 14) 
 
 print(p_tmb_smoking_grouped)
+
+ggsave(".\\graficos\\tmbVsTabagismo.png", width = 6, height = 4, dpi = 300)
+
 ```
 
 # TMB vs. Histórico de Tabagismo (Relevancia estatistica)
@@ -155,8 +156,6 @@ if (length(unique(tmb_smoking_grouped$Smoking_Group)) >= 2 & nrow(tmb_smoking_gr
     # --- Teste Post-Hoc de Dunn (Opcional, se p < 0.05) ---
     # Para saber EXATAMENTE quais pares de grupos são diferentes (ex: Não-Fumante vs. Fumante)
 
-    
-     
      # Realizar o Teste de Dunn com correção de Bonferroni para comparações múltiplas
     dunn_test_result <- tmb_smoking_grouped %>%
     dunn_test(TMB_NONSYNONYMOUS ~ Smoking_Group, p.adjust.method = "bonferroni")
@@ -195,7 +194,7 @@ top_10_genes <- head(gene_frequency, 10)
 
 p_top_genes <- ggplot(top_10_genes,
                       aes(x = reorder(Hugo_Symbol, Mutation_Frequency), y = Mutation_Frequency)) +
-  geom_bar(stat = "identity", fill = "#3399CC") +
+  geom_bar(stat = "identity", fill = "#CC3333") +
   coord_flip() + # Inverte o eixo para melhor leitura dos nomes dos genes
   labs(title = "Top 10 Genes Mais Mutados",
        x = "Gene (Hugo Symbol)",
@@ -208,6 +207,8 @@ p_top_genes <- ggplot(top_10_genes,
   scale_y_continuous(expand = expansion(mult = c(0, 0.15)))
 
 p_top_genes
+
+ggsave(".\\graficos\\genes_mais_mutados.png", width = 6, height = 4, dpi = 300)
 ```
 
 
