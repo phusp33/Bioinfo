@@ -49,10 +49,82 @@ print('Desvio padrao idade:')
 sd(dados$AGE, na.rm = TRUE)
 ```
 
+```{r}
+idade_sexo_df <- dados %>%
+  filter(SEX %in% c("Male", "Female"), 
+         !is.na(AGE) & AGE != "") %>%
+  mutate(
+    AGE = as.numeric(AGE), # Idade deve ser numérica
+    SEX_PT = case_when(
+      SEX == "Male" ~ "Masculino",
+      SEX == "Female" ~ "Feminino",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  # Garantir que não haja NAs após conversão
+  filter(!is.na(AGE), !is.na(SEX_PT))
+
+# --- 2. Realizar o Teste de Wilcoxon ---
+
+if (length(unique(idade_sexo_df$SEX_PT)) == 2) {
+  
+  wilcox_result <- wilcox.test(AGE ~ SEX_PT, 
+                               data = idade_sexo_df)
+
+  print("=========================================================")
+  print("Resultado do Teste de Wilcoxon (Idade vs. Sexo)")
+  print("=========================================================")
+  print(wilcox_result)
+  
+  # Interpretação do Resultado
+  p_value <- wilcox_result$p.value
+  
+  print(paste("Valor p:", format(p_value, scientific = TRUE, digits = 3)))
+
+  if (p_value < 0.05) {
+    print("Conclusão: HÁ diferença estatisticamente significativa (p < 0.05) na idade entre pacientes do sexo Masculino e Feminino.")
+  } else {
+    print("Conclusão: NÃO HÁ diferença estatisticamente significativa (p >= 0.05) na idade entre pacientes do sexo Masculino e Feminino.")
+  }
+} else {
+  print("Erro: Não há dois grupos de sexo válidos ('Masculino' e 'Feminino') para comparação.")
+}
+```
+
 
 ```{r}
-ggplot(dados %>% filter(SEX %in% c("Male", "Female")),
-       aes(x = SEX)) +
+p_sexo_dark <- ggplot(dados %>% filter(SEX %in% c("Male", "Female")) %>% mutate(
+    SEX_PT = case_when(
+      SEX == "Male" ~ "Masculino",
+      SEX == "Female" ~ "Feminino",
+    )
+  ),
+                      aes(x = SEX_PT)) +
+  
+  # Mudar a cor das barras para Vermelho Escuro
+  geom_bar() + 
+  
+  theme_minimal(base_size = 14) +
+  labs(
+    title = "Distribuição por Sexo",
+    x = "",
+    y = "Número de Pacientes"
+  )
+
+print(p_sexo_dark)
+
+ggsave(".\\graficos\\qtde_pacientes_por_sexo.png")
+```
+
+
+```{r}
+ggplot(dados %>% filter(SEX %in% c("Male", "Female")) %>% mutate(
+    SEX_PT = case_when(
+      SEX == "Male" ~ "Masculino",
+      SEX == "Female" ~ "Feminino",
+    )
+  ),
+  aes(x = SEX_PT)) +
   geom_bar(fill = "steelblue") +
   theme_minimal() +
   labs(title = "Distribucao por Sexo",
@@ -67,14 +139,158 @@ ggsave(".\\graficos\\qtde_pacientes_por_sexo.jpeg", width = 6, height = 4, dpi =
 - A população é jovem, idosa ou mista?
 
 ```{r}
-dados %>% 
-  filter(!is.na(AGE) & AGE != "") %>% 
-  ggplot(aes(x = AGE)) +
-  geom_histogram(bins = 30, color = "black", fill = "lightblue") +
-  theme_minimal() +
-  labs(title = "Distribuicao da Idade", x = "Idade (anos)", y = "Contagem")
+# --- Geração do Histograma com Fundo Transparente e Fontes Brancas ---
 
-ggsave(".\\graficos\\distribuicao_idades.jpeg", width = 6, height = 4, dpi = 300)
+p_idade_transparente <- dados %>% 
+  filter(!is.na(AGE) & AGE != "") %>% 
+  mutate(AGE = as.numeric(AGE)) %>% # Garante que a idade é numérica
+  ggplot(aes(x = AGE)) +
+  
+  # Cor da barra em vermelho escuro, borda em branco
+  geom_histogram(bins = 30, color = "white", fill = "#358498") + 
+  
+  labs(
+    title = "Distribuição da Idade", 
+    x = "Idade (anos)", 
+    y = "Número de Pacientes"
+  ) +
+  
+  theme_minimal(base_size = 14) 
+
+print(p_idade_transparente)
+
+# --- Para salvar o PNG Transparente ---
+# Execute este comando no seu RStudio:
+# ggsave("histograma_idade_transparente.png", 
+#        plot = p_idade_transparente, 
+#        bg = "transparent", 
+#        width = 8, height = 5, units = "in", dpi = 300)
+
+ggsave(".\\graficos\\distribuicao_idades.png", width = 6, height = 4, dpi = 300)
+```
+
+```{r}
+# --- 1. Preparação dos Dados e Tradução (Mantida) ---
+dados_idade_sexo <- dados %>% 
+  filter(!is.na(AGE) & AGE != "" & !is.na(SEX) & SEX != "") %>%
+  mutate(AGE = as.numeric(AGE)) %>%
+  mutate(
+    SEX_PT = case_when(
+      SEX == "Male" ~ "Masculino",
+      SEX == "Female" ~ "Feminino",
+      TRUE ~ "Outro"
+    )
+  ) %>%
+  filter(SEX_PT %in% c("Masculino", "Feminino"))
+
+
+# --- 2. Geração do Histograma com TODAS as Fontes em Branco e Fundo Transparente ---
+
+p_idade_sexo_transparente <- ggplot(dados_idade_sexo, 
+                       aes(x = AGE, fill = SEX_PT)) +
+  
+  geom_histogram(bins = 30, color = "white") + # Borda das barras em branco
+  
+  # Cria painéis separados por Sexo
+  facet_wrap(~ SEX_PT, scales = "free_y") + 
+  
+  labs(
+    title = "Distribuição da Idade por Sexo", 
+    x = "Idade (anos)", 
+    y = "Número de Pacientes"
+  ) +
+  
+  # Cores personalizadas para as barras
+  scale_fill_manual(
+    values = c("Masculino" = "#377EB8", "Feminino" = "#E41A1C"), 
+    name = "Sexo"
+  ) +
+  theme_minimal(base_size = 14) 
+
+print(p_idade_sexo_transparente)
+
+# --- 3. Salvar o Gráfico como PNG Transparente ---
+# Execute este comando no seu RStudio para salvar o arquivo:
+# ggsave("histograma_idade_sexo_transparente.png", 
+#        plot = p_idade_sexo_transparente, 
+#
+```
+
+
+
+```{r}
+# --- 1. Preparação dos Dados e Tradução (Mantida) ---
+dados_idade_sexo <- dados %>% 
+  filter(!is.na(AGE) & AGE != "" & !is.na(SEX) & SEX != "") %>%
+  mutate(AGE = as.numeric(AGE)) %>%
+  mutate(
+    SEX_PT = case_when(
+      SEX == "Male" ~ "Masculino",
+      SEX == "Female" ~ "Feminino",
+      TRUE ~ "Outro"
+    )
+  ) %>%
+  filter(SEX_PT %in% c("Masculino", "Feminino"))
+
+
+# --- 2. Geração do Histograma com Tema Escuro e Fundo Transparente ---
+
+p_idade_sexo_transparente <- ggplot(dados_idade_sexo, 
+                       aes(x = AGE, fill = SEX_PT)) +
+  
+  geom_histogram(bins = 30, color = "white") + # Cor da borda das barras em branco
+  
+  facet_wrap(~ SEX_PT, scales = "free_y") + 
+  
+  labs(
+    title = "Distribuição da Idade por Sexo", 
+    x = "Idade (anos)", 
+    y = "Número de Pacientes"
+  ) +
+  
+  scale_fill_manual(
+    values = c("Masculino" = "#377EB8", "Feminino" = "#E41A1C"), 
+    name = "Sexo"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    # --- NOVO: Fundo Transparente ---
+    # Define o fundo da área do plot como transparente
+    plot.background = element_rect(fill = "transparent", colour = NA), 
+    # Define o fundo do painel do gráfico como transparente (ou preto, se quiser um painel escuro)
+    panel.background = element_rect(fill = "transparent", colour = NA), 
+    
+    # --- NOVO: Fontes em Branco ---
+    plot.title = element_text(colour = "white", hjust = 0.5), 
+    axis.title = element_text(colour = "white"), 
+    axis.text = element_text(colour = "white"),
+    legend.title = element_text(colour = "white"), 
+    legend.text = element_text(colour = "white"),
+    # Define o fundo da legenda como transparente
+    legend.background = element_rect(fill = "transparent", colour = NA), 
+    legend.box.background = element_rect(fill = "transparent", colour = NA),
+    
+    # Cor do texto dos rótulos (Masculino/Feminino)
+    strip.text = element_text(colour = "white", face = "bold"), 
+    # Fundo do box onde está o texto (transparente)
+    strip.background = element_rect(fill = "transparent", colour = "white"),
+    
+    # Linhas de grade (opcionalmente em branco ou removidas)
+    panel.grid.major = element_line(colour = "gray50"),
+    panel.grid.minor = element_line(colour = "gray30")
+  )
+
+print(p_idade_sexo_transparente)
+
+# --- 3. Salvar o Gráfico como PNG Transparente ---
+# Você deve salvar o gráfico manualmente para garantir a transparência
+ggsave("./graficos/histograma_idade_sexo_transparente.png", 
+       plot = p_idade_sexo_transparente, 
+       bg = "transparent", # Garante a transparência no arquivo final
+       width = 10, height = 6, units = "in", dpi = 300)
+
+print("Gráfico salvo como 'histograma_idade_sexo_transparente.png' com fundo transparente.")
+
 ```
 
 ```{r}
@@ -107,17 +323,48 @@ ggsave(".\\graficos\\distribuicao_estagios.jpeg", width = 6, height = 4, dpi = 3
 - Como está a distribuição de pack-years?
 
 ```{r}
-dados %>%
+# --- 1. Preparação e Tradução dos Dados ---
+dados_traduzidos_contagem <- dados %>%
+  # Limpeza inicial (Garante que 'dados' esteja definido antes deste ponto)
   filter(!is.na(SMOKING_HISTORY), SMOKING_HISTORY != "") %>%
-  ggplot(aes(x = SMOKING_HISTORY)) +
-  geom_bar(fill = "steelblue") +
-  theme_minimal() +
+  
+  # Cria a nova coluna 'SMOKING_HISTORY_PT' com a tradução
+  mutate(
+    SMOKING_HISTORY_PT = case_when(
+      SMOKING_HISTORY == "Current" ~ "Fumante Atual",
+      SMOKING_HISTORY == "Never" ~ "Nunca Fumou",
+      SMOKING_HISTORY == "Other" ~ "Outro",
+      SMOKING_HISTORY == "Reformed (ns)" ~ "Ex-Fumante (Tempo N.E.)",
+      SMOKING_HISTORY == "Reformed <15y" ~ "Ex-Fumante (<15 Anos)",
+      SMOKING_HISTORY == "Reformed >15y" ~ "Ex-Fumante (>15 Anos)",
+      TRUE ~ SMOKING_HISTORY
+    )
+  ) %>%
+  # Calcula a contagem de cada categoria para uso no 'reorder'
+  count(SMOKING_HISTORY_PT, name = "Count")
+
+# --- 2. Gerar o Gráfico Ordenado (Maior para Menor) e Título Ajustado ---
+
+p_smoking_pt_ordenado <- ggplot(dados_traduzidos_contagem, 
+                                 # ORDENAÇÃO: Reordena pelo valor da coluna 'Count'
+                                 aes(x = reorder(SMOKING_HISTORY_PT, Count), y = Count)) +
+  geom_bar(stat = "identity", fill = "#56B4E9") + # Usamos stat="identity" porque já temos a contagem
+  
+  # Gira o gráfico
+  coord_flip() + 
+  
+  theme_minimal(base_size = 14) +
   labs(
-    title = "Distribuição Historico de Tabagismo",
-    x = "Tipo de Fumante",
+    title = "Distribuição Histórico de Tabagismo",
+    x = "",
     y = "Número de Pacientes"
-  )
-ggsave(".\\graficos\\distribuicao_historico_tabagismo.jpeg", width = 6, height = 4, dpi = 300)
+  ) +
+  # AJUSTE DO TÍTULO: Expande as margens para garantir que o título completo seja visível
+  theme(plot.margin = unit(c(1, 1, 1, 1), "cm")) 
+
+print(p_smoking_pt_ordenado)
+
+ggsave(".\\graficos\\distribuicao_historico_tabagismo.png", width = 6, height = 4, dpi = 300)
 ```
 ```{r}
 summary(dados$SMOKING_PACK_YEARS)
@@ -161,7 +408,18 @@ ggsave(".\\graficos\\distribuicao_tabagismo_sexo.jpeg", width = 6, height = 4, d
 dados %>%
   mutate(
     SEX = toupper(trimws(SEX)),
-    SMOKING_HISTORY = trimws(SMOKING_HISTORY)
+    SMOKING_HISTORY = trimws(SMOKING_HISTORY),
+    
+    SMOKING_HISTORY = case_when(
+      SMOKING_HISTORY == "Current" ~ "Fumante Atual",
+      SMOKING_HISTORY == "Never" ~ "Nunca Fumou",
+      SMOKING_HISTORY == "Other" ~ "Outro",
+      SMOKING_HISTORY == "Reformed (ns)" ~ "Ex-Fumante (tempo não especificado)",
+      SMOKING_HISTORY == "Reformed <15y" ~ "Ex-Fumante (<15 anos)",
+      SMOKING_HISTORY == "Reformed >15y" ~ "Ex-Fumante (>15 anos)",
+      TRUE ~ SMOKING_HISTORY
+    )
+    
   ) %>%
   filter(
     SEX %in% c("MALE", "FEMALE"),
@@ -173,12 +431,78 @@ dados %>%
   labs(
     title = "Proporção de Tabagismo Dentro de Cada Sexo",
     x = "Sexo",
-    y = "Proporção"
+    y = "Proporção",
+    fill=NULL
   ) +
   scale_y_continuous(labels = scales::percent) +
-  scale_fill_brewer(palette = "Set2")
+  scale_fill_brewer(palette = "Set2") +
+  scale_x_discrete(labels = c("FEMALE" = "Feminino", "MALE" = "Masculino"))
+
 
 ggsave(".\\graficos\\proporcao_tabagismo_sexo.jpeg", width = 6, height = 4, dpi = 300)
+```
+```{r}
+dados_plot <- dados %>%
+  mutate(
+    SEX = toupper(trimws(SEX)),
+    SMOKING_HISTORY = trimws(SMOKING_HISTORY),
+
+    # Tradução das categorias
+    SMOKING_HISTORY = case_when(
+      SMOKING_HISTORY == "Current" ~ "Fumante Atual",
+      SMOKING_HISTORY == "Never" ~ "Nunca Fumou",
+      SMOKING_HISTORY == "Other" ~ "Outro",
+      SMOKING_HISTORY == "Reformed (ns)" ~ "Ex-Fumante (tempo não especificado)",
+      SMOKING_HISTORY == "Reformed <15y" ~ "Ex-Fumante (<15 anos)",
+      SMOKING_HISTORY == "Reformed >15y" ~ "Ex-Fumante (>15 anos)",
+      TRUE ~ SMOKING_HISTORY
+    )
+  ) %>%
+  filter(
+    SEX %in% c("MALE", "FEMALE"),
+    !is.na(SMOKING_HISTORY), SMOKING_HISTORY != ""
+  ) %>%
+  count(SEX, SMOKING_HISTORY) %>%
+  group_by(SEX) %>%
+  mutate(
+    prop = n / sum(n),
+    prop_label = scales::percent(prop, accuracy = 1)
+  )
+
+ggplot(dados_plot, aes(x = SEX, y = prop, fill = SMOKING_HISTORY)) +
+  geom_col() +
+  geom_text(
+    aes(label = prop_label),
+    position = position_stack(vjust = 0.5),
+    size = 3
+  ) +
+  theme_minimal() +
+  labs(
+    title = "Proporção de Tabagismo Dentro de Cada Sexo",
+    x = "",
+    y = "Proporção",
+    fill = NULL
+  ) +
+   theme(
+   
+    
+    # Cor do Título
+    plot.title = element_text(colour = "white", hjust = 0.5), # Centralizado para melhor visualização
+    
+    # Cor dos Títulos dos Eixos
+    axis.title = element_text(colour = "white"), 
+    
+    # Cor dos Rótulos dos Eixos (Male/Female, números)
+    axis.text = element_text(colour = "white"),
+    
+    legend.text = element_text(colour = "white"),
+   
+  ) +
+  scale_y_continuous(labels = scales::percent) +
+  scale_fill_brewer(palette = "Set2") +
+  scale_x_discrete(labels = c("FEMALE" = "Feminino", "MALE" = "Masculino"))
+
+ggsave(".\\graficos\\proporcao_tabagismo_sexo_COMPLETO.png", width = 6, height = 4, dpi = 300)
 ```
 
 # Pergunta 6 — Idade difere entre fumantes e não fumantes?
